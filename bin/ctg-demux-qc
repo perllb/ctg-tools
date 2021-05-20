@@ -1,0 +1,109 @@
+#!/bin/bash
+
+### This script will run
+### 1. ctg-demux (and automatically get runfolder as pwd)
+### 2. ctg-seqonly-qc (with defined ID)
+
+usage() {
+    echo "Usage: ctg-demux-qc -i PROJECT_ID [ -s SAMPLESHEET ]"  1>&2 
+}
+
+exit_abnormal() {
+    usage
+    exit 1
+}
+
+
+while getopts i:s: opt; do
+    case $opt in
+	i) id="ctg_$OPTARG"
+	   ;;
+	s) sheet=$OPTARG
+	    ;;
+	\?) echo "> Error: Invalid option -$OPTARG" >&2
+	    exit_abnormal ;;
+	:) echo "> Error: -${OPTARG} requires an argument: -i needs project-id and -s need samplesheet name! "
+	    exit_abnormal ;;
+    esac
+done
+
+shift "$(( OPTIND -1 ))"
+
+if [ -z $id ]; then
+    echo "> Error: missing -i PROJECT_ID!"
+    exit_abnormal
+fi
+if [ -z $sheet ]; then
+    echo "> Error: missing -s SAMPLESHEET!"
+    exit_abnormal
+fi
+
+echo ""
+echo "> The following arguments are entered:"
+echo "ID: $id"
+echo "Sheet: $sheet"
+echo ""
+read -p "> WARNING: Can only be run from within runfolder! Are you in runfolder in which you want to demultiplex? (y/n)  ... " prompt
+if [[ $prompt != "y" ]]
+then 
+    echo "> Exiting: Go to runfolder!"
+    exit 0
+fi
+
+# Get current director (MUST BE EXECUTED FROM RUN FOLDER)
+run=$(pwd)
+baseSheet=$(echo $sheet | sed 's/.csv//g')
+
+outdir=$run/ctg-demux-qc
+
+mkdir -p $outdir
+mkdir -p $outdir/fastq
+
+echo "> Demultiplexing      $run"
+echo "> With samplesheet:   $baseSheet"
+echo "> Project ID:         $id"
+echo "> Output dir:         $outdir"
+echo ""
+echo "> Sumbitting bcl2fastq to SLURM!"
+
+singcmd="singularity exec --bind /projects/ /projects/fs1/shared/ctg-containers/ngs-tools/ngs-tools.sif"
+
+
+echo "#!/bin/sh
+#SBATCH -c 20
+#SBATCH -t 48:00:00
+#SBATCH --mem 100G
+#SBATCH -J ctg-demux-qc_$baseSheet
+#SBATCH -o ctg-demux-qc_$baseSheet.out
+#SBATCH -e ctg-demux-qc_$baseSheet.err
+
+cd $run
+
+
+$singcmd bcl2fastq \
+    -R $run \
+    --sample-sheet $sheet \
+    --no-lane-splitting  \
+    -r 1 \
+    -p 16 \
+    -w 1 \
+    -o $outdir/fastq//
+
+
+mkdir -p $outdir/ctg-interop
+    
+$singcmd interop_summary $run --csv=1 > $outdir/ctg-interop/interop_summary
+$singcmd interop_index-summary $run --csv=1 > $outdir/ctg-interop/interop_index-summary
+
+$singcmd multiqc $outdir/ctg-interop $outdir/fastq/Stats/Stats.json -n $outdir/multiqc_${id}_seqonly_demux.html
+
+cp  $outdir/multiqc_${id}_seqonly_demux.html /projects/fs1/shared/ctg-qc/seqonly-qc/
+
+" > ctg-demux-qc_$baseSheet.sh
+
+sbatch ctg-demux-qc_$baseSheet.sh
+
+
+
+
+

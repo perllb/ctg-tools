@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# sync data to lfs603 customer folder 
+
+usage() {
+    echo "Usage: ctg-deliver -u CTG-USER-LFS -d DATA-TO-DELIVER -c CUSTOMER-USER-LFS"  1>&2 
+}
+
+exit_abnormal() {
+    usage
+    exit 1
+}
+
+
+while getopts u:d:c: opt; do
+    case $opt in
+	u) ctguser="$OPTARG"
+	   ;;
+	d) data="$OPTARG"
+	    ;;
+	c) customer="$OPTARG"
+	    ;;
+	\?) echo "> Error: Invalid option -$OPTARG" >&2
+	    exit_abnormal ;;
+	:) echo "> Error: -${OPTARG} requires an argument!" 
+	    exit_abnormal ;;
+    esac
+done
+
+shift "$(( OPTIND -1 ))"
+
+if [ -z $ctguser ]; then
+    echo "> Error: missing -u CTG-USER-LFS!"
+    exit_abnormal
+fi
+if [ -z $data ]; then
+    echo "> Error: missing -d DATA-TO-DELIVER!"
+    exit_abnormal
+fi 
+if [ -z $data ]; then
+    echo "> Error: missing -c CUSTOMER-USER-LFS!"
+    exit_abnormal
+fi 
+
+# Remove '/' suffix from data folder
+newdata=$(echo $data | sed 's/\/$//')
+data=$newdata
+
+cmd="rsync -av --progress $data $ctguser@lfs603.srv.lu.se:/srv/data/$customer/"
+
+
+echo ""
+echo "> The following arguments are entered:"
+echo "CTG-USER : $ctguser"
+echo "DATA     : $data"
+echo "CUSTOMER : $customer"
+echo ""
+echo "> Current command will be executed: "
+echo "> $cmd"
+echo ""
+echo ""
+read -p "> GO? (y/n)  ... : " prompt
+
+if [[ $prompt != "y" ]]
+then 
+    echo "> Exiting: Go to runfolder!"
+    exit 0
+else
+    echo ".. Starting rsync .."
+    $cmd | tee snc.$data.log 
+    echo "> Sync ready."; echo ""
+    echo "> Changing permissions and ownership of delivery folder.."
+
+    mod="ssh $ctguser@lfs603.srv.lu.se sudo chmod 770 -R /srv/data/$customer/$data"
+    own="ssh $ctguser@lfs603.srv.lu.se sudo chown -R ${customer}:$ctguser /srv/data/$customer/$data"
+
+    echo "$mod"
+    echo "$own" 
+
+    $mod
+    $own
+
+    echo 
+    echo "Done"
+fi

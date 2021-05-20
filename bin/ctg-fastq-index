@@ -1,0 +1,13 @@
+#!/bin/bash
+
+fq=$1
+
+if [ -z "$fq" ]
+then
+    echo "> Error: specify fastq file to check!"; echo ""; echo "";
+    echo "> Usage:":
+    echo "ctg_fastq_index <fastq file>"
+else
+    zcat $fq | grep "^@" | cut -f10 -d":" | sort | uniq -c | sort -n
+fi
+

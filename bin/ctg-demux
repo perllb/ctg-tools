@@ -1,0 +1,66 @@
+#!/bin/sh
+
+read -p "> WARNING: Can only be run from within runfolder! Are you in runfolder in which you want to demultiplex? (y/n)  ... " prompt
+if [[ $prompt != "y" ]]
+then 
+    echo "> Exiting: Go to runfolder!"
+    exit 0
+fi
+
+# Get current director (MUST BE EXECUTED FROM RUN FOLDER
+run=$(pwd)
+
+mkdir -p $run/Fastq_Raw
+
+## READ SAMPLESHEET FROM COMMAND
+sheet=$1
+if [ -z $sheet ]
+then
+    echo "> WARNING: No samplesheet specified, using default:"
+    ssheet=$run/SampleSheet.csv
+    echo ">> Samplesheet: $ssheet"
+        
+    read -p "Is this ok? (y/n)  ... " prompt
+    if [[ $prompt != "y" ]]
+    then 
+	echo "Try again with:"
+	echo "> CTGdemux <name of sample sheet you want to run> "
+	exit 0
+    fi
+    baseSheet=SampleSheet
+else
+    ssheet=$run/$sheet
+    baseSheet=$(echo $sheet | sed 's/.csv//g')
+fi
+
+
+echo "> Demultiplexing      $run"
+echo "> With samplesheet:   $ssheet"
+echo ""
+echo "> Sumbitting to SLURM!"
+
+echo "#!/bin/sh
+#SBATCH -c 20
+#SBATCH -t 48:00:00
+#SBATCH --mem 100G
+#SBATCH -J demux_$baseSheet
+#SBATCH -o demux_$baseSheet.out
+#SBATCH -e demux_$baseSheet.err
+
+cd $run
+singularity exec --bind /projects/fs1/ /projects/fs1/shared/ctg-containers/bulkRNA/bulkRNA_STARv2.7.6a.sif bcl2fastq \
+    -R $run \
+    --sample-sheet $ssheet \
+    --no-lane-splitting  \
+    -r 1 \
+    -p 16 \
+    -w 1 \
+    -o $run/Fastq_Raw/
+" > demux_$baseSheet.sh
+
+sbatch demux_$baseSheet.sh
+
+
+
+
+

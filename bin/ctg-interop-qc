@@ -1,0 +1,58 @@
+#!/bin/bash
+
+run=$(pwd)
+brun=$(basename $run)
+id="ctg_interop_${brun}"
+
+echo "###################"
+echo "# INTEROP MULTIQC #"
+echo "###################"
+
+printf "> Runfolder: $run\n"
+printf "> ID: $id\n"
+echo ""; echo "";
+        
+# Check if meta-ID already exist
+if [ -d $run/ctg-interop ]; then
+    # Prompt user to approve overwriting current ctg-interop folder
+    read -p "> WARNING: ctg-interop has been run before in this runfolder ($brun) 
+
+ Do you want to overwrite this folder? (Delete current content?) 
+
+(y/n)  ... : " prompt
+    if [[ $prompt != "y" ]]
+    then 
+	echo "> Exiting.. !"
+	exit;
+    else
+	rm -r $run/ctg-interop
+    fi
+fi
+
+echo ""; echo ""; 
+echo "> Creating interop run report for folder: "; 
+echo $run; echo "..."
+
+singcmd="singularity exec --bind /projects/ /projects/fs1/shared/ctg-containers/ngs-tools/ngs-tools.sif"
+
+mkdir -p $run/ctg-interop
+    
+$singcmd interop_summary $run --csv=1 > $run/ctg-interop/interop_summary
+$singcmd interop_index-summary $run --csv=1 > $run/ctg-interop/interop_index-summary
+
+echo ""; echo "> Interop-summaries created can be found in: $run/ctg-interop "; echo "";
+
+$singcmd multiqc -f $run/ctg-interop -n $run/ctg-interop/multiqc_${id} 
+
+cp -r $run/ctg-interop/multiqc* /projects/fs1/shared/ctg-qc/interop/
+
+
+echo "> MultiQC interop report generated"
+echo "> Report name: multiqc_${id}"
+echo "> Report can be found in:"
+echo "- $run/ctg-interop/"
+echo " and"
+echo "- /projects/fs1/shared/ctg-qc/interop/"
+    
+
+

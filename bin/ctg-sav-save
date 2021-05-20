@@ -1,0 +1,60 @@
+#!/bin/bash
+
+run=$(pwd)
+brun=$(basename $run)
+id="ctg_SAV_${brun}"
+
+echo "#######################"
+echo "# SAVE SAV ILLUMINA   #"
+echo "# - InterOp           #"
+echo "# - RunInfo.xml       #"
+echo "# - RunParameters.xml #"
+echo "#######################"
+echo "";
+printf "> Runfolder: $run\n"
+printf "> ID: $id\n"
+echo ""; 
+ 
+savdir="/projects/fs1/shared/ctg-qc/sav-illumina/${id}"
+
+# Check if already exist
+if [ -d $savdir ]; then
+    # Prompt user to approve overwriting current ctg-interop folder
+    read -p "> WARNING: ctg-sav-save has been run before in this runfolder ($brun) 
+- output folder: $savdir
+
+ Do you want to overwrite this folder? (Delete current content?) 
+
+(y/n)  ... : " prompt
+    if [[ $prompt != "y" ]]
+    then 
+	echo "> Exiting.. !"
+	exit;
+    else
+	rm -r $savdir
+    fi
+fi
+
+echo ""
+echo "> Saving SAV info for folder : $brun" 
+echo "> Output dir                 : $savdir"
+
+mkdir -p $savdir
+    
+echo "> Saving:"
+echo " - InterOp folder "
+echo " - RunParameters.xml "
+echo " - RunInfo.xml "
+
+cp -r ${run}/InterOp $savdir/
+cp ${run}/RunParameters.xml $savdir/
+cp ${run}/RunInfo.xml $savdir/
+
+touch ctg_SAV_saved_${brun}.done
+
+echo "> Done! "
+echo " - SAV info saved in $savdir ! "
+
+    
+
+

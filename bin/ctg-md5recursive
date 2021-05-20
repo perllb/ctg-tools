@@ -1,0 +1,17 @@
+#!/bin/sh
+
+currdir=$(pwd)
+
+echo ">> Generating md5sums recursively from:"
+echo "> $currdir"
+echo ""
+echo ""
+
+read -p "Are you sure you want to continue (y/n)?  " choice
+
+case "$choice" in
+     y|Y ) echo "> yes - generating md5sums.. "; find -type f -exec md5sum '{}' \; > md5sum.txt ; echo "> md5sums written to 'md5sum.txt' in current directory";;
+     n|N ) echo "> no - exiting!";;
+     * ) echo "> ERROR! invalid confirmation";;
+esac
+     

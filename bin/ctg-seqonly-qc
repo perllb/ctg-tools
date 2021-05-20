@@ -1,0 +1,122 @@
+#!/bin/bash
+
+md5check=0
+run=0
+id=0
+
+usage() {
+
+    echo ""; echo ""; echo "";
+    echo "Usage: ctg-seqonly-qc  -r RUNFOLDER -i PROJECT_ID [ -m MD5SUM (set if recursive md5sum)"  1>&2 
+}
+
+exit_abnormal() {
+    usage
+    exit 1
+}
+
+while getopts ":r:i:m" opt; do
+    case $opt in
+	r) run="$OPTARG"
+	   ;;
+	i) id="ctg_$OPTARG"
+	   ;;
+	m) md5check=1
+	   ;;
+	\?) echo "> Error: Invalid option -$OPTARG" >&2
+	    exit_abnormal ;;
+	:) echo "> Error: -r needs runfolder path!!"
+	    exit_abnormal ;;
+    esac
+done
+
+if [ $run == 0 ]
+then
+    exit_abnormal
+    echo ""; echo ""; echo "Exiting.."; echo "";
+fi
+
+if [ $id == 0 ]
+then
+    exit_abnormal
+    echo ""; echo ""; echo "Exiting.."; echo "";
+fi
+
+if [[ $run != 0 && $id != 0 ]]
+then
+
+    outdir = $run/ctg-seqonly-qc
+    mkdir -p $outdir
+
+    echo "";    echo ""
+    echo "> Runfolder: $run"
+    echo "> ID:        $id"
+    echo "> Outdir:    $outdir"
+        
+    if [ $md5check == 1 ]
+    then
+	printf "> Running md5check: TRUE\n\n"
+    
+       	echo ">> This will generate md5sums recursively from:"
+	echo "$run"; echo ""; echo "";
+
+	read -p "Are you sure you want to do the recursive md5sum  (y/n)?  " choice
+
+	case "$choice" in
+	    y|Y ) echo "> yes - generate the md5sum! ";;
+	    n|N ) echo "> no - skip the md5sum!"; 
+		md5check=0;
+		echo "> Running md5check: FALSE";;
+	    * ) echo "> ERROR! invalid confirmation";;
+	esac
+
+    else
+	echo "> Running md5check: FALSE"
+    fi
+    
+    echo ""; echo ""; echo "";
+    echo "> Creating interop run report for folder: "; echo $run; echo "..."
+
+
+    singcmd="singularity exec --bind /projects/ /projects/fs1/shared/ctg-containers/ngs-tools/ngs-tools.sif"
+    
+    $singcmd interop_summary $run --csv=1 > $outdir/ctg-interop/interop_summary
+    $singcmd interop_index-summary $run --csv=1 > $outdir/ctg-interop/interop_index-summary
+    
+    echo "> Reports created can be found in: $run/interop "; echo "";
+        
+    # Check if demultiplexed and Stats exists
+    if [ -f $run/Data/Intensities/BaseCalls/Stats/Stats.json ]
+    then
+	
+	echo "> Running multiQC on ctg-interop output and demux stats .. ";	echo "..."
+	
+	$singcmd multiqc $run/ctg-interop $run/Data/Intensities/BaseCalls/Stats/Stats.json -n $outdir/multiqc_${id}_seqonly-demux-qc.html 
+
+    elif [ -f $run/ctg-demux-qc/fastq/Stats/Stats.json ]
+	then
+	    echo "> Running multiQC on ctg-interop output and demux stats .. ";	echo "..."
+	
+	$singcmd multiqc $run/ctg-interop $run/Fastq_Raw/Stats/Stats.json -n $outdir/multiqc_${id}_seqonly-demux-qc.html
+    else
+	echo "> Running multiQC on ctg-interop output only (Demux data not found) ..";	    echo "..."
+	
+	$singcmd multiqc $run/ctg-interop -n $outdir/multiqc_${id}_seqonly-qc.html
+    fi
+
+    ctgqc='/projects/fs1/shared/ctg-qc/seqonly-qc/$id/'
+    mkdir -p $ctgqc
+    cp $outdir $ctgqc
+    
+    echo "> MultiQC report generated and can be found in $run!"
+    
+    if [ $md5check == 1 ]
+    then
+	cd $run
+	echo ""; echo "> Running md5sum recursively in $run"
+	find -type f -exec md5sum '{}' \; > $outdir/md5sum.CTG.run.txt
+	echo "> Done. "
+	echo "> md5sum.txt written to $outdir/md5sum.CTG.run.txt"; echo "";
+    fi
+fi
+
